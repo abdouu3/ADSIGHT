@@ -1,0 +1,1104 @@
+// ============================================================
+// AdSight - Maquette interactive (données SIMULÉES)
+// Compatible DartPad (Flutter, aucun package externe)
+// ============================================================
+import 'package:flutter/material.dart';
+
+void main() => runApp(const AdSightApp());
+
+// ------------------------------------------------------------
+// 1. PERSONNALISATION : change les couleurs ici
+// ------------------------------------------------------------
+const kBrand = Color(0xFF0E7490); // couleur principale (bleu pétrole)
+const kBrandDark = Color(0xFF0B1F3A); // bleu nuit (dégradé)
+const kBlocked = Color(0xFFE5484D); // rouge  = bloqué
+const kAllowed = Color(0xFF30A46C); // vert   = autorisé
+const kPending = Color(0xFFF5A524); // orange = à valider
+
+Color alpha(Color c, double o) => c.withAlpha((o * 255).round());
+
+// ------------------------------------------------------------
+// 2. MODÈLE DE DONNÉES (simulé)
+// ------------------------------------------------------------
+enum Verdict { blocked, allowed, pending }
+
+Color verdictColor(Verdict v) => v == Verdict.blocked
+    ? kBlocked
+    : v == Verdict.allowed
+    ? kAllowed
+    : kPending;
+
+IconData verdictIcon(Verdict v) => v == Verdict.blocked
+    ? Icons.gpp_bad_rounded
+    : v == Verdict.allowed
+    ? Icons.verified_user_rounded
+    : Icons.help_center_rounded;
+
+String verdictLabel(Verdict v) => v == Verdict.blocked
+    ? 'Bloquée'
+    : v == Verdict.allowed
+    ? 'Autorisée'
+    : 'À valider';
+
+class Decision {
+  final String ip, domain, time, reason;
+  final int confidence;
+  Verdict verdict;
+  bool trusted;
+  Decision(
+    this.ip,
+    this.domain,
+    this.time,
+    this.verdict,
+    this.confidence,
+    this.reason, {
+    this.trusted = false,
+  });
+}
+
+List<Decision> sampleData() => [
+  Decision(
+    '185.220.14.32',
+    'ads.trackmax.net',
+    '14:32',
+    Verdict.blocked,
+    97,
+    'Bannière promotionnelle avec bouton d\'achat.',
+  ),
+  Decision(
+    '142.250.74.110',
+    'cdn.videoplay.com',
+    '14:30',
+    Verdict.pending,
+    62,
+    'Contenu ambigu : vidéo pouvant contenir un pré-roll publicitaire.',
+  ),
+  Decision(
+    '93.184.216.34',
+    'monsite-ecole.fr',
+    '14:27',
+    Verdict.allowed,
+    8,
+    'Page de cours : aucun élément publicitaire détecté.',
+  ),
+  Decision(
+    '203.0.113.77',
+    'popup.winbig.io',
+    '14:21',
+    Verdict.blocked,
+    99,
+    'Pop-up « Vous avez gagné » typique d\'une arnaque.',
+  ),
+  Decision(
+    '151.101.1.69',
+    'static.news-daily.com',
+    '14:15',
+    Verdict.pending,
+    55,
+    'Encart sponsorisé mélangé à un article.',
+  ),
+  Decision(
+    '104.18.32.7',
+    'api.banque-en-ligne.fr',
+    '14:09',
+    Verdict.allowed,
+    2,
+    'Service bancaire : liste blanche de sécurité.',
+    trusted: true,
+  ),
+  Decision(
+    '198.51.100.23',
+    'pixel.adtrack.org',
+    '13:58',
+    Verdict.blocked,
+    94,
+    'Pixel de suivi publicitaire invisible.',
+  ),
+  Decision(
+    '172.217.18.14',
+    'fonts.webstatic.com',
+    '13:50',
+    Verdict.allowed,
+    11,
+    'Ressource de police de caractères.',
+  ),
+  Decision(
+    '45.133.1.90',
+    'sponsor.clickzone.biz',
+    '13:44',
+    Verdict.pending,
+    71,
+    'Carrousel de produits sponsorisés.',
+  ),
+];
+
+// ------------------------------------------------------------
+// 3. APPLICATION + THÈMES (clair / sombre)
+// ------------------------------------------------------------
+class AdSightApp extends StatefulWidget {
+  const AdSightApp({super.key});
+  @override
+  State<AdSightApp> createState() => _AdSightAppState();
+}
+
+class _AdSightAppState extends State<AdSightApp> {
+  bool dark = false;
+
+  ThemeData _theme(Brightness b) {
+    final isDark = b == Brightness.dark;
+    return ThemeData(
+      useMaterial3: true,
+      colorScheme: ColorScheme.fromSeed(seedColor: kBrand, brightness: b),
+      scaffoldBackgroundColor: isDark
+          ? const Color(0xFF0B1220)
+          : const Color(0xFFF3F6FA),
+      appBarTheme: AppBarTheme(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: false,
+        titleTextStyle: TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+          color: isDark ? Colors.white : kBrandDark,
+        ),
+        iconTheme: IconThemeData(color: isDark ? Colors.white : kBrandDark),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'AdSight',
+      debugShowCheckedModeBanner: false,
+      theme: _theme(Brightness.light),
+      darkTheme: _theme(Brightness.dark),
+      themeMode: dark ? ThemeMode.dark : ThemeMode.light,
+      home: Shell(dark: dark, onDark: (v) => setState(() => dark = v)),
+    );
+  }
+}
+
+// ------------------------------------------------------------
+// 4. COMPOSANTS RÉUTILISABLES
+// ------------------------------------------------------------
+class Panel extends StatelessWidget {
+  final Widget child;
+  final EdgeInsets padding;
+  const Panel({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(16),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      width: double.infinity,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF131C2E) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark ? const Color(0xFF1F2B44) : const Color(0xFFE3E9F2),
+        ),
+        boxShadow: isDark
+            ? []
+            : [
+                BoxShadow(
+                  color: alpha(kBrandDark, .05),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class StatusChip extends StatelessWidget {
+  final Verdict v;
+  const StatusChip(this.v, {super.key});
+  @override
+  Widget build(BuildContext context) {
+    final c = verdictColor(v);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: alpha(c, .14),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        verdictLabel(v),
+        style: TextStyle(color: c, fontWeight: FontWeight.w700, fontSize: 12),
+      ),
+    );
+  }
+}
+
+class DecisionTile extends StatelessWidget {
+  final Decision d;
+  final VoidCallback onTap;
+  const DecisionTile(this.d, {super.key, required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    final c = verdictColor(d.verdict);
+    return ListTile(
+      onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      leading: CircleAvatar(
+        backgroundColor: alpha(c, .14),
+        child: Icon(verdictIcon(d.verdict), color: c, size: 22),
+      ),
+      title: Text(
+        d.ip,
+        style: const TextStyle(
+          fontWeight: FontWeight.w700,
+          fontFamily: 'monospace',
+        ),
+      ),
+      subtitle: Text(
+        '${d.domain}  •  ${d.time}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: StatusChip(d.verdict),
+    );
+  }
+}
+
+class SectionTitle extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  const SectionTitle(this.icon, this.text, {super.key});
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Row(
+      children: [
+        Icon(icon, size: 20, color: kBrand),
+        const SizedBox(width: 8),
+        Text(
+          text,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+        ),
+      ],
+    ),
+  );
+}
+
+// ------------------------------------------------------------
+// 5. COQUE PRINCIPALE (état global + navigation)
+// ------------------------------------------------------------
+class Shell extends StatefulWidget {
+  final bool dark;
+  final ValueChanged<bool> onDark;
+  const Shell({super.key, required this.dark, required this.onDark});
+  @override
+  State<Shell> createState() => _ShellState();
+}
+
+class _ShellState extends State<Shell> {
+  int tab = 0;
+  bool protection = true;
+  int level = 1; // 0 Souple, 1 Équilibré, 2 Strict
+  double sensitivity = 0.6;
+  bool catAds = true, catPopups = true, catTrackers = true;
+  bool family = false, noImages = false;
+  final List<Decision> decisions = sampleData();
+
+  int count(Verdict v) => decisions.where((d) => d.verdict == v).length;
+
+  void open(Decision d) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => DetailPage(
+          d: d,
+          onDecide: (v, trust) => setState(() {
+            d.verdict = v;
+            d.trusted = trust;
+          }),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final titles = ['Tableau de bord', 'Analyses', 'Listes', 'Réglages'];
+    final pages = [_dashboard(), _analyses(), _lists(), _settings()];
+    final pendingCount = count(Verdict.pending);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: kBrand,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.shield_moon_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(titles[tab]),
+          ],
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'Thème clair / sombre',
+            icon: Icon(
+              widget.dark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+            ),
+            onPressed: () => widget.onDark(!widget.dark),
+          ),
+        ],
+      ),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 900),
+          child: pages[tab],
+        ),
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: tab,
+        onDestinationSelected: (i) => setState(() => tab = i),
+        destinations: [
+          const NavigationDestination(
+            icon: Icon(Icons.space_dashboard_outlined),
+            selectedIcon: Icon(Icons.space_dashboard_rounded),
+            label: 'Dashboard',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.image_search_outlined),
+            selectedIcon: Icon(Icons.image_search_rounded),
+            label: 'Analyses',
+          ),
+          NavigationDestination(
+            icon: Badge(
+              label: Text('$pendingCount'),
+              isLabelVisible: pendingCount > 0,
+              child: const Icon(Icons.fact_check_outlined),
+            ),
+            selectedIcon: Badge(
+              label: Text('$pendingCount'),
+              isLabelVisible: pendingCount > 0,
+              child: const Icon(Icons.fact_check_rounded),
+            ),
+            label: 'Listes',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.tune_outlined),
+            selectedIcon: Icon(Icons.tune_rounded),
+            label: 'Réglages',
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------- ÉCRAN 1 : DASHBOARD ----------------
+  Widget _dashboard() {
+    final blocked = count(Verdict.blocked);
+    final analysed = 1240 + decisions.length;
+    final bloquees = 312 + blocked;
+    final mo = (bloquees * 4.6).toStringAsFixed(0);
+    final sec = (bloquees * 0.35).toStringAsFixed(0);
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+      children: [
+        // Bandeau protection
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            gradient: LinearGradient(
+              colors: protection
+                  ? [kBrandDark, kBrand]
+                  : [const Color(0xFF475467), const Color(0xFF667085)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                protection ? Icons.shield_rounded : Icons.shield_outlined,
+                color: Colors.white,
+                size: 44,
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      protection ? 'Protection active' : 'Protection en pause',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      protection
+                          ? 'Votre réseau est surveillé en temps réel'
+                          : 'Aucun blocage n\'est appliqué',
+                      style: TextStyle(color: alpha(Colors.white, .8)),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: protection,
+                activeThumbColor: Colors.white,
+                activeTrackColor: alpha(Colors.white, .35),
+                onChanged: (v) => setState(() => protection = v),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // Niveau de protection
+        Panel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SectionTitle(
+                Icons.security_rounded,
+                'Niveau de protection',
+              ),
+              SizedBox(
+                width: double.infinity,
+                child: SegmentedButton<int>(
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(
+                      value: 0,
+                      label: Text('Souple'),
+                      icon: Icon(Icons.spa_outlined),
+                    ),
+                    ButtonSegment(
+                      value: 1,
+                      label: Text('Équilibré'),
+                      icon: Icon(Icons.balance_rounded),
+                    ),
+                    ButtonSegment(
+                      value: 2,
+                      label: Text('Strict'),
+                      icon: Icon(Icons.lock_outline_rounded),
+                    ),
+                  ],
+                  selected: {level},
+                  onSelectionChanged: (s) => setState(() => level = s.first),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // 4 cartes de chiffres
+        Row(
+          children: [
+            _stat(
+              Icons.travel_explore_rounded,
+              '$analysed',
+              'IP analysées',
+              kBrand,
+            ),
+            const SizedBox(width: 12),
+            _stat(Icons.block_rounded, '$bloquees', 'Pubs bloquées', kBlocked),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            _stat(
+              Icons.data_saver_on_rounded,
+              '$mo Mo',
+              'Données économisées',
+              kAllowed,
+            ),
+            const SizedBox(width: 12),
+            _stat(Icons.bolt_rounded, '$sec s', 'Temps gagné', kPending),
+          ],
+        ),
+        const SizedBox(height: 14),
+
+        // Graphique 7 jours
+        Panel(child: _chart()),
+        const SizedBox(height: 14),
+
+        // Dernières décisions
+        Panel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SectionTitle(Icons.history_rounded, 'Dernières décisions'),
+              for (final d in decisions.take(5))
+                DecisionTile(d, onTap: () => open(d)),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () => setState(() => tab = 1),
+                  icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+                  label: const Text('Tout voir'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _stat(IconData icon, String value, String label, Color c) {
+    return Expanded(
+      child: Panel(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: alpha(c, .14),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: c, size: 22),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              value,
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _chart() {
+    const days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+    const ok = [40, 52, 38, 61, 47, 30, 44];
+    const bl = [22, 30, 18, 41, 27, 15, 26];
+    const pe = [3, 5, 2, 6, 4, 1, 3];
+    const maxTotal = 110.0;
+    const maxH = 130.0;
+
+    Widget seg(int v, Color c) =>
+        Container(width: 22, height: v / maxTotal * maxH, color: c);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionTitle(Icons.bar_chart_rounded, 'Activité sur 7 jours'),
+        SizedBox(
+          height: maxH + 24,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              for (int i = 0; i < 7; i++)
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: Column(
+                        children: [
+                          seg(pe[i], kPending),
+                          seg(bl[i], kBlocked),
+                          seg(ok[i], kAllowed),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(days[i], style: const TextStyle(fontSize: 11)),
+                  ],
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 16,
+          children: [
+            _legend(kAllowed, 'Autorisé'),
+            _legend(kBlocked, 'Bloqué'),
+            _legend(kPending, 'En attente'),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _legend(Color c, String t) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(
+        width: 10,
+        height: 10,
+        decoration: BoxDecoration(color: c, shape: BoxShape.circle),
+      ),
+      const SizedBox(width: 6),
+      Text(t, style: const TextStyle(fontSize: 12)),
+    ],
+  );
+
+  // ---------------- ANALYSES (historique complet) ----------------
+  Widget _analyses() {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+      children: [
+        Panel(
+          child: Column(
+            children: [
+              for (final d in decisions) DecisionTile(d, onTap: () => open(d)),
+              if (decisions.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text('Historique vide.'),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ---------------- ÉCRAN 3 : LISTES ----------------
+  Widget _lists() {
+    return DefaultTabController(
+      length: 3,
+      child: Column(
+        children: [
+          const TabBar(
+            tabs: [
+              Tab(icon: Icon(Icons.gpp_bad_rounded), text: 'Liste noire'),
+              Tab(
+                icon: Icon(Icons.verified_user_rounded),
+                text: 'Liste blanche',
+              ),
+              Tab(icon: Icon(Icons.hourglass_top_rounded), text: 'En attente'),
+            ],
+          ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                _listTab(Verdict.blocked),
+                _listTab(Verdict.allowed),
+                _listTab(Verdict.pending),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _listTab(Verdict v) {
+    final items = decisions.where((d) => d.verdict == v).toList();
+    if (items.isEmpty) {
+      return const Center(child: Text('Aucune adresse dans cette liste.'));
+    }
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Panel(
+          child: Column(
+            children: [
+              for (final d in items)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  onTap: () => open(d),
+                  title: Text(
+                    d.ip,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                  subtitle: Text(d.domain),
+                  trailing: v == Verdict.pending
+                      ? Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: 'Bloquer',
+                              icon: const Icon(
+                                Icons.block_rounded,
+                                color: kBlocked,
+                              ),
+                              onPressed: () =>
+                                  setState(() => d.verdict = Verdict.blocked),
+                            ),
+                            IconButton(
+                              tooltip: 'Autoriser',
+                              icon: const Icon(
+                                Icons.check_circle_rounded,
+                                color: kAllowed,
+                              ),
+                              onPressed: () =>
+                                  setState(() => d.verdict = Verdict.allowed),
+                            ),
+                          ],
+                        )
+                      : TextButton.icon(
+                          icon: const Icon(Icons.undo_rounded, size: 18),
+                          label: const Text('Annuler'),
+                          onPressed: () => setState(
+                            () => d.verdict = v == Verdict.blocked
+                                ? Verdict.allowed
+                                : Verdict.pending,
+                          ),
+                        ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ---------------- ÉCRAN 4 : RÉGLAGES ----------------
+  Widget _settings() {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+      children: [
+        Panel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SectionTitle(Icons.speed_rounded, 'Sensibilité de l\'IA'),
+              Slider(
+                value: sensitivity,
+                divisions: 10,
+                label: '${(sensitivity * 100).round()} %',
+                onChanged: (v) => setState(() => sensitivity = v),
+              ),
+              Text(
+                'Seuil de blocage automatique : ${(sensitivity * 100).round()} % de confiance',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        Panel(
+          padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SectionTitle(
+                Icons.category_rounded,
+                'Catégories à bloquer',
+              ),
+              _switch(
+                Icons.ads_click_rounded,
+                'Publicités',
+                catAds,
+                (v) => catAds = v,
+              ),
+              _switch(
+                Icons.web_asset_rounded,
+                'Pop-ups',
+                catPopups,
+                (v) => catPopups = v,
+              ),
+              _switch(
+                Icons.visibility_off_rounded,
+                'Traqueurs',
+                catTrackers,
+                (v) => catTrackers = v,
+              ),
+              _switch(
+                Icons.family_restroom_rounded,
+                'Mode famille',
+                family,
+                (v) => family = v,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        Panel(
+          padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SectionTitle(Icons.privacy_tip_rounded, 'Confidentialité'),
+              _switch(
+                Icons.image_not_supported_rounded,
+                'Désactiver l\'envoi d\'images à l\'IA',
+                noImages,
+                (v) => noImages = v,
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 8, bottom: 8, top: 4),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.delete_outline_rounded),
+                    label: const Text('Supprimer l\'historique'),
+                    onPressed: () {
+                      setState(() => decisions.clear());
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Historique supprimé (simulation)'),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        Center(
+          child: Text(
+            'AdSight • maquette de démonstration • données simulées',
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _switch(
+    IconData icon,
+    String label,
+    bool value,
+    void Function(bool) set,
+  ) {
+    return SwitchListTile(
+      contentPadding: EdgeInsets.zero,
+      secondary: Icon(icon, color: kBrand),
+      title: Text(label),
+      value: value,
+      onChanged: (v) => setState(() => set(v)),
+    );
+  }
+}
+
+// ------------------------------------------------------------
+// 6. ÉCRAN 2 : DÉTAIL D'UNE ANALYSE
+// ------------------------------------------------------------
+class DetailPage extends StatelessWidget {
+  final Decision d;
+  final void Function(Verdict, bool) onDecide;
+  const DetailPage({super.key, required this.d, required this.onDecide});
+
+  void _act(BuildContext context, Verdict v, bool trust, String msg) {
+    onDecide(v, trust);
+    Navigator.of(context).pop();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = verdictColor(d.verdict);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final image = Container(
+      height: 220,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1B2640) : const Color(0xFFE9EEF5),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.image_search_rounded, size: 56, color: alpha(kBrand, .8)),
+          const SizedBox(height: 8),
+          const Text(
+            'Capture analysée',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          Text(d.domain, style: const TextStyle(fontSize: 12)),
+        ],
+      ),
+    );
+
+    final verdictPanel = Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      d.ip,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    StatusChip(d.verdict),
+                  ],
+                ),
+              ),
+              SizedBox(
+                width: 84,
+                height: 84,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox(
+                      width: 84,
+                      height: 84,
+                      child: CircularProgressIndicator(
+                        value: d.confidence / 100,
+                        strokeWidth: 9,
+                        color: c,
+                        backgroundColor: alpha(c, .15),
+                      ),
+                    ),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${d.confidence}%',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const Text('confiance', style: TextStyle(fontSize: 10)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const Divider(height: 28),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.psychology_alt_rounded, color: kBrand),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(d.reason, style: const TextStyle(height: 1.4)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    final buttons = Column(
+      children: [
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: kBlocked,
+              padding: const EdgeInsets.all(16),
+            ),
+            icon: const Icon(Icons.block_rounded),
+            label: const Text('Confirmer le blocage'),
+            onPressed: () => _act(
+              context,
+              Verdict.blocked,
+              false,
+              '${d.ip} ajoutée à la liste noire',
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: kAllowed,
+              padding: const EdgeInsets.all(16),
+            ),
+            icon: const Icon(Icons.check_circle_rounded),
+            label: const Text('Autoriser'),
+            onPressed: () =>
+                _act(context, Verdict.allowed, false, '${d.ip} autorisée'),
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(padding: const EdgeInsets.all(16)),
+            icon: const Icon(Icons.verified_user_rounded),
+            label: const Text('Toujours autoriser ce site'),
+            onPressed: () => _act(
+              context,
+              Verdict.allowed,
+              true,
+              '${d.domain} ajouté à la liste blanche',
+            ),
+          ),
+        ),
+      ],
+    );
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Détail de l\'analyse')),
+      body: LayoutBuilder(
+        builder: (context, box) {
+          final wide = box.maxWidth > 700;
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+            children: [
+              if (wide)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: image),
+                    const SizedBox(width: 16),
+                    Expanded(child: verdictPanel),
+                  ],
+                )
+              else ...[
+                image,
+                const SizedBox(height: 14),
+                verdictPanel,
+              ],
+              const SizedBox(height: 16),
+              buttons,
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
